@@ -1,8 +1,8 @@
-# Task List: AI Agent Memory Poisoning (OWASP ASI06) Demo & Defense Harness
+# Refinement Plan: Professional Human-Engineered Codebase
 
-- [x] Repository Scaffolding & Dependencies (`requirements.txt`, `src/__init__.py`)
-- [x] Part 1: Vulnerable Agent & Memory Store (`src/memory_store.py`, `src/tools.py`, `src/agent.py`)
-- [x] Part 2: Attack Simulation Payloads (`src/attack_payloads.py`)
-- [x] Part 3: Defense Integration with `agent-memory-guard` (`src/guard.py`)
-- [x] Part 4: Demonstration Runner, Reporting & Documentation (`run_demo.py`, `README.md`)
-- [x] Verification & Testing
+- [x] LangChain Agent Core Refactoring (`src/agent.py`, `src/tools.py`, `src/memory_store.py`)
+- [x] Defense Interceptor Refactoring (`src/guard.py`)
+- [x] Realistic Attack Vector Suite (`src/attacks.py`)
+- [x] Human CLI & Benchmark Runner (`main.py`)
+- [x] Professional Security Research README (`README.md`)
+- [x] Pytest Unit & Integration Test Suite (`tests/`)
