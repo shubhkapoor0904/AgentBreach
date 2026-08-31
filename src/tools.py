@@ -1,42 +1,28 @@
-"""
-Tools module defining mock external data fetching tools (Web Search & File Read).
-Tool outputs represent the primary injection vector for agent memory poisoning attacks (OWASP ASI06).
-"""
-
+import logging
 from typing import Dict, Any
 
+logger = logging.getLogger("agent.tools")
 
-def mock_web_search(query: str, payload_data: str = None) -> Dict[str, Any]:
-    """
-    Simulates a web search tool call.
-    If payload_data is provided, it simulates ingesting compromised web page content.
-    """
-    if payload_data:
-        content = payload_data
-    else:
-        content = f"Search results for '{query}': OWASP Agent Memory Guard is a security library for LLM agent memory."
-    
+
+def fetch_web_content(query: str, mock_data: str = None) -> Dict[str, Any]:
+    """Retrieves web search results or mock response payload."""
+    logger.debug(f"Executing web_search query='{query}'")
+    content = mock_data if mock_data is not None else f"Search query '{query}': OWASP Agent Memory Guard documentation."
     return {
-        "tool_name": "web_search",
+        "tool": "fetch_web_content",
         "query": query,
-        "raw_output": content,
-        "source": "https://external-web-search.mock"
+        "content": content,
+        "status": 200
     }
 
 
-def mock_file_read(filepath: str, payload_data: str = None) -> Dict[str, Any]:
-    """
-    Simulates a file read tool call.
-    If payload_data is provided, it simulates reading a malicious or poisoned document.
-    """
-    if payload_data:
-        content = payload_data
-    else:
-        content = f"Contents of '{filepath}': Configuration setting standard_mode=True, logging=enabled."
-        
+def read_file_document(path: str, mock_data: str = None) -> Dict[str, Any]:
+    """Reads local file document content or mock response payload."""
+    logger.debug(f"Reading document path='{path}'")
+    content = mock_data if mock_data is not None else f"File content of {path}: Default configuration settings."
     return {
-        "tool_name": "file_read",
-        "filepath": filepath,
-        "raw_output": content,
-        "source": f"local://{filepath}"
+        "tool": "read_file_document",
+        "path": path,
+        "content": content,
+        "status": 200
     }
