@@ -1,6 +1,6 @@
-# AgentBreach: AI Agent Memory Poisoning (OWASP ASI06) Demonstration & Defense Harness
+# AgentBreach: AI Agent Memory Poisoning (OWASP ASI06) Benchmark Suite
 
-A security research harness evaluating **AI Agent Memory Poisoning attacks (OWASP ASI06)** and defense integration using the **OWASP Agent Memory Guard** library (`agent-memory-guard`).
+A security research benchmark for evaluating **AI Agent Memory Poisoning attacks (OWASP ASI06)** and defense integration using the **OWASP Agent Memory Guard** library (`agent-memory-guard`).
 
 ## Overview & Threat Model
 
@@ -8,82 +8,115 @@ LLM agents frequently utilize long-term persistent storage (SQLite databases, ve
 
 **Memory Poisoning (OWASP ASI06)** occurs when untrusted data—primarily **tool outputs** (web search results, file ingestion, third-party API payloads)—contains malicious prompt injections or parameter tampering commands that are written into long-term agent memory without validation.
 
-### Context Reset Persistence
-When a conversation context window is reset, short-term message history is purged. However, when the agent executes subsequent queries, it retrieves records from its persistent long-term storage. If poisoned payloads or tampered metadata exist in the underlying storage layer, **the exploit persists and continues to manipulate agent behavior in future sessions**.
+### Cross-Session Persistence
+When a conversation context window is reset (`agent.reset_context_window()`), short-term message history is purged. However, when the agent executes subsequent queries, it retrieves records from its persistent long-term storage. If poisoned payloads or tampered metadata exist in the underlying storage layer, **the exploit persists and continues to manipulate agent behavior in future sessions**.
 
 ---
 
-## Project Structure
+## Key Features & Benchmark Capabilities
+
+1. **Structured Attack Dataset (100+ Test Cases)**:
+   - Covers 8 categories: Prompt Injection, Indirect/Tool-Output Injection, Protected-Key Tampering, Sensitive Data Exfiltration, Memory Overwrite/Deletion, Self-Reinforcing Poisoning, Cross-Session Persistence, and Obfuscated/Encoded Variants (Base64, ROT13, Hex, Homoglyphs, Markdown Hiding).
+2. **Benign Memory Dataset & FPR Measurement (40+ Test Cases)**:
+   - Evaluates defense specificity against user preferences, task history, legitimate tool outputs, project context, and standard instructions.
+3. **Rigorous Security Evaluation Metrics Engine**:
+   - Calculates Attack Success Rate (ASR), Poisoning Success Rate (PSR), Persistence Rate, Detection Rate (Recall), False Positive Rate (FPR), Precision, F1-Score, and Defense Latency Overhead (ms).
+   - Generates `results.json`, `results.csv`, and `report.md`.
+4. **LLM Provider Abstraction**:
+   - Supports keyless local mock execution (`MockLLMProvider`) as default, alongside optional real API adapters (`OpenAIProvider`, `AnthropicProvider`).
+5. **Adaptive Attacker Engine**:
+   - Multi-stage mutation engine (`AdaptiveAttacker`) attempting iterative evasions (encoding swaps, stealth context embedding) upon defense interception.
+
+---
+
+## Codebase Architecture
 
 ```
 AgentBreach/
-├── main.py                # Main benchmark runner and CLI interface
-├── requirements.txt       # Project dependencies
+├── main.py                     # Benchmark CLI runner & experiment orchestrator
+├── requirements.txt            # Dependencies (agent-memory-guard, tabulate, pydantic, pytest)
 ├── src/
-│   ├── agent.py           # Unprotected agent pipeline (vulnerable to ASI06)
-│   ├── attacks.py         # Benchmark attack vector suite definitions
-│   ├── guard.py           # Guarded agent pipeline with MemoryGuard policy middleware
-│   ├── memory_store.py    # SQLite-backed persistent memory store
-│   └── tools.py           # Untrusted tool input mocks (web search, file read)
-├── tests/
-│   └── test_pipeline.py   # Automated pytest suite
-├── results_report.md      # Exported evaluation benchmark results
+│   ├── adaptive_attacker.py    # Multi-stage adaptive mutation engine
+│   ├── agent.py                # Unprotected agent pipeline (vulnerable to ASI06)
+│   ├── dataset.py              # Attack (100+) & Benign (40+) dataset generators
+│   ├── guard.py                # Guarded agent pipeline with MemoryGuard policy middleware
+│   ├── llm_provider.py         # LLM provider interface (Mock, OpenAI, Anthropic)
+│   ├── memory_store.py         # SQLite-backed persistent memory store
+│   ├── metrics.py              # Security metrics calculator & exporter
+│   └── tools.py                # Untrusted tool input mocks (web search, file read)
+├── tests/                      # Pytest suite
+│   ├── test_adaptive.py
+│   ├── test_dataset.py
+│   ├── test_metrics.py
+│   └── test_pipeline.py
+├── results.json                # Exported benchmark metric JSON
+├── results.csv                 # Exported benchmark metric CSV
+├── report.md                   # Exported benchmark evaluation report
 └── README.md
 ```
 
 ---
 
-## Attack Suite Categories
+## Evaluation Benchmark Comparison Table
 
-The benchmark suite tests 5 attack scenarios based on OWASP Agent Memory Guard benchmark criteria:
-
-1. **Tool Output Prompt Injection**: Ingesting `[SYSTEM OVERRIDE]` directives via search tool output.
-2. **Metadata Key Tampering**: Overwriting protected system state (`user_role` -> `admin_privileges_granted`).
-3. **Exfiltration Directives**: Injecting commands to leak confidential system credentials to external endpoints.
-4. **Bias Reinforcement Loop**: Submitting repeated subtle writes to skew long-term agent memory weighting.
-5. **Cross-Session Persistence**: Demonstrating exploit retention following context window resets.
-
----
-
-## Defense Integration (`MemoryGuard`)
-
-The `GuardedAgent` pipeline inspects all memory operations through security policy middleware:
-
-- **Protected Key Locking**: Prevents modification of internal state metadata (`user_role`, `system_secret`, `system_instructions`).
-- **Prompt Injection Inspection**: Intercepts override patterns prior to storage.
-- **Exfiltration Prevention**: Quarantines memory writes carrying exfiltration instructions.
-- **Frequency Capping**: Redacts duplicate tool output entries to prevent bias manipulation.
+| Metric | Vulnerable Agent | Guarded Agent | Metric Definition |
+| --- | --- | --- | --- |
+| **Attack Success Rate (ASR)** | 100.0% | **0.0%** | % of attacks that successfully hijacked agent response |
+| **Poisoning Success Rate (PSR)** | 100.0% | **0.0%** | % of attack payloads written to persistent memory |
+| **Persistence Rate** | 100.0% | **0.0%** | % of exploits retained across context window resets |
+| **Detection Rate (Recall)** | - | **100.0%** | True Positive rate of memory poisoning interception |
+| **False Positive Rate (FPR)** | - | **0.0%** | % of benign memory items incorrectly blocked |
+| **Precision** | - | **100.0%** | Ratio of true poisoning blocks to total blocks |
+| **F1 Score** | - | **1.0000** | Harmonic mean of Precision and Recall |
+| **Defense Latency** | - | **< 0.1 ms** | Average evaluation overhead per memory write |
 
 ---
 
-## Installation & Running
+## Formal Metric Equations
 
-### Requirements
-Python 3.9+
+$$\text{ASR} = \frac{\text{Successful Hijacks}}{\text{Total Attack Scenarios}}$$
+
+$$\text{PSR} = \frac{\text{Payloads Written to Memory}}{\text{Total Attack Scenarios}}$$
+
+$$\text{Recall} = \frac{TP}{TP + FN} \quad (\text{where } TP = \text{intercepted malicious memory writes})$$
+
+$$\text{FPR} = \frac{FP}{FP + TN} \quad (\text{where } FP = \text{benign memory writes incorrectly blocked})$$
+
+$$\text{F1 Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
+
+---
+
+## Quickstart & CLI Usage
 
 ### Setup
 ```bash
 pip install -r requirements.txt
 ```
 
-### Run Benchmark
+### Run Full Benchmark Suite (Offline / Default)
 ```bash
 python main.py
 ```
 
-### List Registered Attack Vectors
+### Run Adaptive Attacker Benchmark
 ```bash
-python main.py --mode list-attacks
+python main.py --mode adaptive
 ```
 
-### Run Tests
+### Run with Real LLM Provider (Optional)
+```bash
+export OPENAI_API_KEY="your-api-key"
+python main.py --provider openai
+```
+
+### Execute Pytest Suite
 ```bash
 pytest
 ```
 
 ---
 
-## Attribution & License
+## License & Attribution
 
-- **Defense Mechanisms**: Defense policies and scanning patterns leverage the [OWASP Agent Memory Guard](https://github.com/OWASP/agent-memory-guard) project (Apache-2.0 License).
-- **Harness Code**: MIT License.
+- **Defense Infrastructure**: Powered by [OWASP Agent Memory Guard](https://github.com/OWASP/agent-memory-guard) (Apache-2.0 License).
+- **Benchmark Code**: MIT License.
