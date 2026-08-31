@@ -1,101 +1,111 @@
-"""
-Persistent memory store module backing agent long-term memory using SQLite.
-Demonstrates state persistence across LLM context window resets.
-"""
-
 import json
 import sqlite3
-import os
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 
-class PersistentMemoryStore:
+class SQLiteMemoryStore:
+    """Persistent SQLite store for agent long-term key-value memory and message history."""
+
     def __init__(self, db_path: str = "agent_memory.db"):
         self.db_path = db_path
-        self._init_db()
+        self._setup()
 
-    def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS memory_entries (
+    def _get_conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _setup(self) -> None:
+        with self._get_conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS memory_kv (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
-                    category TEXT DEFAULT 'general',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    category TEXT NOT NULL DEFAULT 'general',
+                    updated_at TEXT NOT NULL,
                     metadata TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS message_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
                 )
             """)
             conn.commit()
 
-    def write(self, key: str, value: str, category: str = "general", metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        meta_json = json.dumps(metadata or {})
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+    def put(self, key: str, value: str, category: str = "general", metadata: Optional[Dict[str, Any]] = None) -> None:
+        now = datetime.utcnow().isoformat()
+        meta_str = json.dumps(metadata) if metadata else None
+        with self._get_conn() as conn:
+            conn.execute(
                 """
-                INSERT OR REPLACE INTO memory_entries (key, value, category, metadata)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO memory_kv (key, value, category, updated_at, metadata)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value=excluded.value,
+                    category=excluded.category,
+                    updated_at=excluded.updated_at,
+                    metadata=excluded.metadata
                 """,
-                (key, value, category, meta_json)
+                (key, value, category, now, meta_str)
             )
             conn.commit()
-        return {"key": key, "value": value, "category": category, "metadata": metadata or {}}
 
-    def read(self, key: str) -> Optional[Dict[str, Any]]:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT key, value, category, metadata FROM memory_entries WHERE key = ?", (key,))
-            row = cursor.fetchone()
-            if row:
-                return {
-                    "key": row[0],
-                    "value": row[1],
-                    "category": row[2],
-                    "metadata": json.loads(row[3]) if row[3] else {}
+    def get(self, key: str) -> Optional[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            cur = conn.execute("SELECT key, value, category, updated_at, metadata FROM memory_kv WHERE key = ?", (key,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "key": row["key"],
+                "value": row["value"],
+                "category": row["category"],
+                "updated_at": row["updated_at"],
+                "metadata": json.loads(row["metadata"]) if row["metadata"] else {}
+            }
+
+    def list_all(self) -> List[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            cur = conn.execute("SELECT key, value, category, updated_at, metadata FROM memory_kv ORDER BY updated_at ASC")
+            return [
+                {
+                    "key": row["key"],
+                    "value": row["value"],
+                    "category": row["category"],
+                    "updated_at": row["updated_at"],
+                    "metadata": json.loads(row["metadata"]) if row["metadata"] else {}
                 }
-        return None
+                for row in cur.fetchall()
+            ]
 
-    def search(self, query: str) -> List[Dict[str, Any]]:
-        results = []
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT key, value, category, metadata FROM memory_entries WHERE value LIKE ? OR key LIKE ?",
-                (f"%{query}%", f"%{query}%")
+    def delete(self, key: str) -> bool:
+        with self._get_conn() as conn:
+            cur = conn.execute("DELETE FROM memory_kv WHERE key = ?", (key,))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def append_message(self, role: str, content: str) -> None:
+        now = datetime.utcnow().isoformat()
+        with self._get_conn() as conn:
+            conn.execute(
+                "INSERT INTO message_history (role, content, timestamp) VALUES (?, ?, ?)",
+                (role, content, now)
             )
-            for row in cursor.fetchall():
-                results.append({
-                    "key": row[0],
-                    "value": row[1],
-                    "category": row[2],
-                    "metadata": json.loads(row[3]) if row[3] else {}
-                })
-        return results
-
-    def get_all(self) -> List[Dict[str, Any]]:
-        results = []
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT key, value, category, metadata FROM memory_entries")
-            for row in cursor.fetchall():
-                results.append({
-                    "key": row[0],
-                    "value": row[1],
-                    "category": row[2],
-                    "metadata": json.loads(row[3]) if row[3] else {}
-                })
-        return results
-
-    def clear(self):
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM memory_entries")
             conn.commit()
 
-    def close(self):
-        if os.path.exists(self.db_path):
-            try:
-                os.remove(self.db_path)
-            except OSError:
-                pass
+    def clear_messages(self) -> None:
+        """Clears short-term conversation context history without affecting persistent memory_kv."""
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM message_history")
+            conn.commit()
+
+    def purge_all(self) -> None:
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM memory_kv")
+            conn.execute("DELETE FROM message_history")
+            conn.commit()
