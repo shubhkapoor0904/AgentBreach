@@ -1,8 +1,11 @@
-# Refinement Plan: Professional Human-Engineered Codebase
+# Task List: AgentBreach Benchmark Expansion
 
-- [x] LangChain Agent Core Refactoring (`src/agent.py`, `src/tools.py`, `src/memory_store.py`)
-- [x] Defense Interceptor Refactoring (`src/guard.py`)
-- [x] Realistic Attack Vector Suite (`src/attacks.py`)
-- [x] Human CLI & Benchmark Runner (`main.py`)
-- [x] Professional Security Research README (`README.md`)
-- [x] Pytest Unit & Integration Test Suite (`tests/`)
+- [x] 1. Attack Dataset (100+ test cases) & Benign Dataset (40+ test cases) (`src/dataset.py`)
+- [x] 2. LLM Provider Abstraction (`src/llm_provider.py`)
+- [x] 3. Adaptive Attacker Engine (`src/adaptive_attacker.py`)
+- [x] 4. Defense Guard & De-obfuscation Updates (`src/guard.py`)
+- [x] 5. Agent & Core Integration (`src/agent.py`)
+- [x] 6. Security Evaluation Metrics Engine (`src/metrics.py`)
+- [x] 7. CLI Benchmark Runner (`main.py`)
+- [x] 8. Pytest Test Suite (`tests/`)
+- [x] 9. Documentation & Verification (`README.md`, `walkthrough.md`)
