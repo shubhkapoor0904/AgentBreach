@@ -1,85 +1,89 @@
-# AI Agent Memory Poisoning (OWASP ASI06) & Defense Demonstration
+# AgentBreach: AI Agent Memory Poisoning (OWASP ASI06) Demonstration & Defense Harness
 
-This portfolio project demonstrates understanding of **AI Agent Memory Poisoning attacks (OWASP ASI06)** and defense integration using the **OWASP Agent Memory Guard** library (`agent-memory-guard`).
+A security research harness evaluating **AI Agent Memory Poisoning attacks (OWASP ASI06)** and defense integration using the **OWASP Agent Memory Guard** library (`agent-memory-guard`).
 
-> **Attribution & Credit**: The defense mechanisms in this demonstration leverage the policy models and architecture defined by the [OWASP Agent Memory Guard](https://github.com/OWASP/agent-memory-guard) project (Apache-2.0 License). This repository is a demonstration and attack/defense harness built on top of `agent-memory-guard`.
+## Overview & Threat Model
 
----
+LLM agents frequently utilize long-term persistent storage (SQLite databases, vector stores, key-value stores) to preserve user state and knowledge across execution sessions. Unlike short-term LLM context windows which clear between chat sessions, **persistent memory stores endure indefinitely across sessions**.
 
-## 📌 What is Agent Memory Poisoning (OWASP ASI06)?
+**Memory Poisoning (OWASP ASI06)** occurs when untrusted data—primarily **tool outputs** (web search results, file ingestion, third-party API payloads)—contains malicious prompt injections or parameter tampering commands that are written into long-term agent memory without validation.
 
-LLM Agents use long-term persistent memory (e.g. SQLite, vector stores, key-value stores) to retain knowledge across user sessions. Unlike transient LLM context windows (which reset between conversations), **persistent memory stores endure indefinitely**.
-
-**Memory Poisoning (OWASP ASI06)** occurs when untrusted inputs—specifically external **tool outputs** (web search results, ingested documents, email text) or unauthorized direct memory writes—contain malicious instructions or skewed assertions that get written into the agent's long-term memory.
-
-### Why Memory Poisoning Survives Context Resets
-When a user clears the chat context window (`agent.reset_context()`), the active prompt history is wiped. However, when the agent performs subsequent queries, it retrieves records from its persistent long-term memory store. If malicious instructions or tampered role metadata were written to disk/database prior to the reset, **the poisoned memory persists and continues to hijack the agent in future sessions.**
+### Context Reset Persistence
+When a conversation context window is reset, short-term message history is purged. However, when the agent executes subsequent queries, it retrieves records from its persistent long-term storage. If poisoned payloads or tampered metadata exist in the underlying storage layer, **the exploit persists and continues to manipulate agent behavior in future sessions**.
 
 ---
 
-## 🏗️ Repository Architecture
+## Project Structure
 
 ```
-d:\AgentBreach\
-├── requirements.txt           # Project dependencies (agent-memory-guard, tabulate, etc.)
+AgentBreach/
+├── main.py                # Main benchmark runner and CLI interface
+├── requirements.txt       # Project dependencies
 ├── src/
-│   ├── __init__.py
-│   ├── memory_store.py        # SQLite-backed persistent agent memory store
-│   ├── tools.py               # Mock web search and file read tools (injection vectors)
-│   ├── agent.py               # VulnerableAgent (Part 1: unguarded memory writes)
-│   ├── attack_payloads.py     # Attack suite covering 5 OWASP benchmark categories (Part 2)
-│   └── guard.py               # GuardedAgent & MemoryGuard scanning policy (Part 3)
-├── run_demo.py                # Main benchmark runner & comparison generator (Part 4)
-├── results_report.md          # Generated benchmark evaluation report
-└── README.md                  # Project documentation & security background
+│   ├── agent.py           # Unprotected agent pipeline (vulnerable to ASI06)
+│   ├── attacks.py         # Benchmark attack vector suite definitions
+│   ├── guard.py           # Guarded agent pipeline with MemoryGuard policy middleware
+│   ├── memory_store.py    # SQLite-backed persistent memory store
+│   └── tools.py           # Untrusted tool input mocks (web search, file read)
+├── tests/
+│   └── test_pipeline.py   # Automated pytest suite
+├── results_report.md      # Exported evaluation benchmark results
+└── README.md
 ```
 
 ---
 
-## ⚔️ Attack Categories Evaluated
+## Attack Suite Categories
 
-The demonstration harness executes 5 realistic memory poisoning attack vectors:
+The benchmark suite tests 5 attack scenarios based on OWASP Agent Memory Guard benchmark criteria:
 
-1. **Prompt Injection into Memory**: Tool output injecting `[SYSTEM OVERRIDE]` instructions into long-term storage.
-2. **Protected-Key Tampering**: Overwriting critical system memory key `user_role` to escalate privileges to admin.
-3. **Sensitive Data Leakage**: Ingesting commands instructing the agent to exfiltrate confidential system secrets.
-4. **Self-Reinforcement Loop**: Repeatedly submitting biased assertions to skew agent memory weight and long-term decision making.
-5. **Cross-Session Persistence**: Demonstrating that poisoned memory remains active after context window resets.
-
----
-
-## 🛡️ Defense Mechanism (`MemoryGuard`)
-
-The `GuardedAgent` wraps all persistent memory write operations with `MemoryGuardPolicy` rules inspired by OWASP Agent Memory Guard:
-
-- **Protected Key Locking**: Rejects unauthorized modification of protected system keys (`user_role`, `system_secret`, `system_instructions`).
-- **Prompt Injection Scanner**: Detects and blocks malicious prompt override patterns before writing to disk.
-- **Exfiltration Prevention**: Quarantines memory writes attempting to trigger unauthorized data exfiltration.
-- **Frequency Capping**: Redacts repeated identical payload writes from tool outputs to prevent bias reinforcement loops.
+1. **Tool Output Prompt Injection**: Ingesting `[SYSTEM OVERRIDE]` directives via search tool output.
+2. **Metadata Key Tampering**: Overwriting protected system state (`user_role` -> `admin_privileges_granted`).
+3. **Exfiltration Directives**: Injecting commands to leak confidential system credentials to external endpoints.
+4. **Bias Reinforcement Loop**: Submitting repeated subtle writes to skew long-term agent memory weighting.
+5. **Cross-Session Persistence**: Demonstrating exploit retention following context window resets.
 
 ---
 
-## 🚀 Quickstart & Running the Demo
+## Defense Integration (`MemoryGuard`)
 
-### 1. Installation
-Ensure Python 3.9+ is installed, then install dependencies:
+The `GuardedAgent` pipeline inspects all memory operations through security policy middleware:
+
+- **Protected Key Locking**: Prevents modification of internal state metadata (`user_role`, `system_secret`, `system_instructions`).
+- **Prompt Injection Inspection**: Intercepts override patterns prior to storage.
+- **Exfiltration Prevention**: Quarantines memory writes carrying exfiltration instructions.
+- **Frequency Capping**: Redacts duplicate tool output entries to prevent bias manipulation.
+
+---
+
+## Installation & Running
+
+### Requirements
+Python 3.9+
+
+### Setup
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Run the Benchmark
-Execute the comparison harness:
+### Run Benchmark
 ```bash
-python run_demo.py
+python main.py
 ```
 
-### 3. Review Results
-- The terminal will display a side-by-side comparison table.
-- A detailed markdown evaluation report will be written to `results_report.md`.
+### List Registered Attack Vectors
+```bash
+python main.py --mode list-attacks
+```
+
+### Run Tests
+```bash
+pytest
+```
 
 ---
 
-## 📜 License & Acknowledgments
+## Attribution & License
 
-- **Defense Engine**: Powered by [OWASP Agent Memory Guard](https://github.com/OWASP/agent-memory-guard) (Apache-2.0 License).
-- **Harness Code**: Distributed under the MIT License for educational and research demonstration purposes.
+- **Defense Mechanisms**: Defense policies and scanning patterns leverage the [OWASP Agent Memory Guard](https://github.com/OWASP/agent-memory-guard) project (Apache-2.0 License).
+- **Harness Code**: MIT License.
