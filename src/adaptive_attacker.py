@@ -64,10 +64,11 @@ class AdaptiveAttacker:
             key = f"{attack.attack_id}_attempt_{attempt}"
             
             # Execute attack step
+            p_val = attack.payload if attempt == 0 else current_payload
             if attack.source_type == "direct_write":
-                verdict = target_agent.set_memory(attack.payload if attempt == 0 else current_payload, key=attack.attack_id)
+                verdict = target_agent.set_memory(key=attack.attack_id, value=p_val)
             else:
-                verdict = target_agent.run_tool("web_search", "query", inject_payload=current_payload if attempt > 0 else attack.payload, memory_key=key)
+                verdict = target_agent.run_tool("web_search", "query", inject_payload=p_val, memory_key=key)
 
             action = verdict.action if hasattr(verdict, "action") else ("BLOCKED" if verdict.get("status") == "BLOCKED" else "ALLOWED")
             
